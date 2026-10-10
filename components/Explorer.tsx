@@ -11,6 +11,7 @@ import {
 import { applyFileRecovery } from "../lib/apply-recovery";
 import { supportsDependencies } from "../lib/file-types";
 import FileRetry from "./FileRetry";
+import FileExplanation from "./FileExplanation";
 import {
   colors,
   cityLayout,
@@ -536,16 +537,18 @@ export default function Explorer({ initial }: { initial: Graph }) {
                     </small>
                   </p>
                 ))}
-              {file.source !== null && (
-                <>
-                  <h3>
-                    Source <small>read only</small>
-                  </h3>
-                  <pre tabIndex={0} aria-label={`Source of ${file.id}`}>
-                    <code>{file.source}</code>
-                  </pre>
-                </>
-              )}
+              <FileExplanation
+                key={JSON.stringify([
+                  graph.name,
+                  graph.commit,
+                  file.id,
+                  file.blobSha,
+                  file.contentStatus,
+                  graph.recoveryId,
+                ])}
+                file={file}
+                graph={graph}
+              />
             </>
           ) : (
             <p>

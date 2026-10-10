@@ -18,6 +18,7 @@ export const contentLabels: Record<ContentStatus, string> = {
 };
 export interface FileNode {
   id: string;
+  blobSha?: string;
   source: string | null;
   bytes: number | null;
   lines: number | null;

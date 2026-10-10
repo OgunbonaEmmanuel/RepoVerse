@@ -38,7 +38,7 @@ Static imports do not establish runtime call order or prove that a change will b
 ## Suggested implementation starting point
 Use TypeScript, React, Next.js, Three.js through React Three Fiber, and a JS/TS syntax parser such as the TypeScript compiler API. These are proposed project choices; verify current compatible stable package versions and APIs before scaffolding.
 
-Keep repository fetching, source analysis, graph modelling, and rendering separate. Fetch repository data on the server. No database or user accounts are needed initially. An optional server-side GitHub token may help with API limits; never expose it to the browser. An LLM API key is not required.
+Keep repository fetching, source analysis, graph modelling, and rendering separate. Fetch repository data on the server. No database or user accounts are needed initially. An optional server-side GitHub token may help with API limits; never expose it to the browser. An LLM API key is not required for core exploration; the separately authorised single-file explanation feature uses optional server-only OpenAI configuration.
 
 Graph model: files with stable path-based IDs and metadata; resolved directed import edges with their source location; external imports; unresolved imports with reasons; aggregate coverage and exclusions. Keep UI objects out of the analysis model.
 
@@ -76,5 +76,29 @@ Complete the stages in order and keep the app runnable. Avoid building a large d
 - Type checking, relevant tests, and the production build pass; unrun checks are identified.
 - README contains verified installation/run commands, support boundaries, limits, and optional environment variables.
 
+## Added: on-demand single-file AI explanation
+
+Authorised after the core MVP: explain one selected, loaded JS/TS source file
+using a server-side OpenAI Responses request. Generation requires an explicit
+click after a disclosure that selected code will be sent to OpenAI. Unloaded,
+binary and potentially sensitive configuration files are ineligible.
+
+Provide purpose, important symbols, direct-import usage and unknowns in validated
+structured output with exact source excerpts and clickable references only when
+the quoted text matches the cited source range. Preserve original numbering and
+flag unmatched citations per claim; location matching is not semantic verification.
+Supply
+only bounded selected source and direct dependency metadata; do not fetch or
+infer unseen dependency implementation. Treat code as untrusted data and provide
+no tools or execution access. Label truncation and AI uncertainty.
+
+Use optional server-only OPENAI_API_KEY / OPENAI_MODEL, an economical text model,
+bounded successful-result caching and in-flight deduplication keyed by snapshot,
+file/blob identity, model and prompt version. Keep stale responses out of changed
+selections, expose safe loading/retry/setup states, and retain all core features
+without credentials. Verify with mocked provider responses; paid live checks
+require separate user approval. See README for exact limits and setup.
+
 ## Deferred features
-AI explanations, chat, runtime request tracing, impact predictions, private repositories, accounts, collaboration, Git-history playback, and deployment. Add these after the core explorer is useful.
+Repository chat, automatic explanations, runtime request tracing, impact predictions,
+private repositories, accounts, collaboration, Git-history playback, and deployment.

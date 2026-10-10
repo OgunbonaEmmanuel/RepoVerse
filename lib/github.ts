@@ -93,6 +93,7 @@ export async function importGitHub(input: unknown, options: Options = {}) {
       continue;
     }
     const file = inventoryFile(entry.path, entry.size ?? null, limits);
+    file.blobSha = entry.sha;
     file.githubUrl = `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/blob/${commit.sha}/${entry.path.split("/").map(encodeURIComponent).join("/")}`;
     files.push(file);
     blobs.set(file.id, entry.sha);

@@ -1,6 +1,6 @@
 ﻿# RepoVerse
 
-A working code explorer: real files form a city, and parsed, resolved imports connect its buildings. Next.js, strict TypeScript, React, Three.js / React Three Fiber, and the TypeScript compiler API. No AI, accounts, database, or deployment.
+A working code explorer: real files form a city, and parsed, resolved imports connect its buildings. Next.js, strict TypeScript, React, Three.js / React Three Fiber, and the TypeScript compiler API. Optional on-demand AI explanations describe one selected file. No accounts, database, repository chat, or deployment.
 
 ## Setup
 
@@ -33,6 +33,122 @@ The suite starts/stops a production server and uses installed **Microsoft Edge**
 Optional: copy `.env.example` to `.env.local`, set **GITHUB_TOKEN**, then restart the server. The variable is server-only: never use a NEXT_PUBLIC_ prefix. A token improves API quota; demo mode needs none. Only preview-eligible files receive blob requests; other buildings use tree metadata alone.
 
 ## Exploring
+
+### Optional: explain one file
+
+Set these server-only values in `.env.local` alongside `package.json`, then
+restart the server. Existing GitHub settings can remain in the same file:
+
+```dotenv
+OPENAI_API_KEY=your_key_here
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+`.env.example` contains an empty key and the default model identifier, never a
+real credential. `.env.local` is Git-ignored. Never prefix these variables with
+`NEXT_PUBLIC_`. Missing credentials produce a setup message when requested;
+the city, parsing, import and navigation still work without OpenAI.
+
+**Explain this file** is available for nonempty, loaded JS/TS source (including
+JSX/TSX and module variants). Its first click displays a disclosure; **Send selected
+source and explain** explicitly authorises that request. Selection and import
+never trigger generation. Each selected file shows the disclosure before sending.
+Unloaded sources explain that contents must be loaded first. Binary/LFS files,
+unsupported types, hidden paths and configuration/credential/secret/settings paths
+are ineligible on both client and server. These filename rules are conservative,
+not a guarantee that ordinary source contains no secrets; review source before sending.
+
+The local endpoint receives only the selected file's source, identity and outgoing
+dependency records. OpenAI receives the path, derived language, bounded source,
+analysis/truncation status and known direct-import metadata (specifier, source line,
+resolution kind, target path and reason). Dependency implementations, incoming
+importers, other repository sources and server credentials are not included.
+Source/comments/metadata are treated as untrusted evidence, never instructions.
+The model has no tools, execution access, repository browsing or automatic follow-up.
+AI claims never modify the parsed dependency graph.
+
+The official `openai` Node SDK **6.49.0** calls the
+[Responses API with strict structured output](https://developers.openai.com/api/docs/guides/structured-outputs?api-mode=responses).
+The default [GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini)
+is an economical, low-latency text/code model supporting structured output; its
+documented text rates at implementation were $0.40 input / $1.60 output per
+million tokens. `OPENAI_MODEL` can select another accessible Responses model
+with structured-output support; alternatives have not been live-verified.
+API use may incur charges. No provider calls were made during automated verification.
+
+Input is capped at 512 KiB of loaded source to the local endpoint, with a 768 KiB
+JSON request limit and 10-second body deadline. Only the first **24 KiB / 800
+complete source lines** and at most **80 direct-import records / 8 KiB of metadata**
+reach the model. A shared line splitter preserves comments, blank lines and the
+final empty line, normalizing CRLF/LF (and lone CR) to LF for display and matching.
+The provider receives explicit original line numbers (`N: source`) instead of raw
+unnumbered source. Number prefixes add at most about 4 KiB beyond the raw-source
+budget. A truncated request identifies the omitted original range; numbering never
+restarts. An oversized first line is rejected rather than silently split.
+Truncated explanations are visibly labelled. Output is capped at **1,600 tokens**,
+with a 30-second SDK deadline and automatic SDK retries disabled.
+Refusals, incomplete results and malformed response structures produce safe
+failure messages with an explicit retry action. Citation location failures are
+handled per claim as described below; they never trigger automatic repair calls.
+
+Explanations target **120–220 words**, shorter for simple files: one purpose
+sentence, up to four important symbols, up to eight import-use items and up to
+two specific unknowns. Import explanations describe visible calls, arguments,
+return-value uses, property accesses, re-exports and type-only/side-effect imports,
+citing their usage lines. Unseen dependency internals should not replace descriptions
+of what the selected file visibly does. Actual model quality remains unverified
+without a separately approved paid check.
+
+The unknowns section is omitted when empty. Generic caveats are in a collapsed
+**About this explanation** note. Prompt/schema version `file-explanation-v3-evidence` separates
+new requests from older cached explanations; click **Request explanation again**
+after refreshing the app to obtain the revised format.
+Every reference includes an exact source excerpt (at most 1,200 characters) and
+an original line range. Server and client independently verify that the range was
+supplied and the quote matches those lines, including whitespace and punctuation.
+Quotes can start/end within a line but must span every cited line. Only line endings
+are normalized. Repeated text is checked at the claimed location, never relocated
+to the first occurrence. Blank quotes do not count as evidence.
+
+Matched references appear as separate, spaced buttons. Click one to reveal,
+highlight and keyboard-focus its exact source range; hover exposes its quoted
+excerpt. Incorrect-but-in-bounds and out-of-bounds references are non-clickable
+and mark their claim **unverified citation**, while valid references remain usable.
+There are no automatic paid correction requests. Structurally valid results with
+flagged citations retain those flags in the normal cache. This is a text-location
+check, **not semantic verification**: matching text (especially repeated or generic
+text) does not establish that the code supports the claim. Text is escaped, never
+rendered as provider HTML/Markdown. Snapshot changes clear explanations and abort
+pending requests, including source/blob changes at the same path.
+The model is instructed to distinguish inference and describe visible import use
+without inventing unseen dependency implementations. It starts with a short
+introduction for an unfamiliar developer and describes visible delegation, such
+as forwarding arguments from a returned function to a method.
+
+Successful validated results use a **32-entry, 30-minute LRU server-memory cache**.
+Keys include repository identity, commit, path, Git blob SHA, model and prompt
+version, plus a full selected-source digest and bounded context digest. Fixtures
+without a Git blob SHA derive one from source; the source digest also separates
+decoded text from original blobs (for example UTF-8 BOM handling). Identical
+in-flight requests share one provider call. Failures are not cached. There are at
+most **two concurrent distinct calls and eight new calls per minute per process**.
+Cached hits do not consume this local request allowance.
+
+Cache entries hold explanations, quoted source excerpts and identity metadata,
+not the full source body; requests hold bounded context in memory while in flight.
+Restart/expiry/eviction can require
+a fresh paid request. Switching file/repository aborts the browser request and
+discards stale results; a provider call already running may finish and populate
+the server cache. Limits/cache are process-local. The endpoint is intended for
+this local MVP, not an authenticated or multi-instance hosted service.
+`store: false` disables Responses application-state storage; it is not a claim of
+zero provider retention. Consult [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data).
+
+Offline checks: `npm test` includes mocked SDK/provider responses and UI tests;
+`npm run test:e2e -- --grep-invert "public GitHub"` includes a fully intercepted
+AI browser flow. Do not run paid live explanation checks without separate approval.
+
+### City and repository navigation
 
 - Import a public repository root URL, e.g. `https://github.com/octocat/Hello-World`. The default branch is pinned to one commit. Branch/subtree URLs receive explicit guidance.
 - Select a building or file-tree button. Search matches full paths without regard to case; Enter selects and focuses the first result. Tab and Enter/Space operate file buttons and dependency links. Selected ancestors reopen; navigating outside the filter clears it.
@@ -97,6 +213,56 @@ Defaults are configurable in `lib/model.ts`; analyser/importer accept explicit l
 Inventory exclusions remain explicit: path segments node_modules, .git, dist, build, coverage, .next, vendor and `__pycache__`; lockfiles; unsafe paths; symlinks/submodules and invalid blob metadata. `lib/policy.ts` contains the path rules. These exclusions are counted and listed by path/reason in coverage. Binary formats, unsupported extensions and oversized content are **not inventory exclusions**. Generated files outside the named directories can still appear.
 
 ## Verification and measurements
+
+### Single-file AI explanations
+
+Citation-evidence revision, verified on 10 October 2026: **90 offline tests passed**
+(the live GitHub check remained skipped), strict TypeScript and the production
+build passed, and **13 offline Edge browser checks passed** on port 3107.
+The Express fixture's SHA-256 and exact source positions are pinned in tests:
+createApplication 36–56, prototype exports 62–64, Router exports 70–71 and
+middleware exports 77–81. The visible request delegation is at line 38.
+Checks cover correct quotes, incorrect-but-in-bounds and out-of-bounds ranges,
+blank/trailing lines, CRLF/LF, repeated quotes, truncation, cache reuse without
+repair calls, and changes to file, repository, commit, blob and source.
+Browser checks verify separate button spacing, exact highlighted text, keyboard
+focus, non-clickable unverified citations and selection clearing. The citation
+screenshot was inspected. Existing city/camera, hierarchy, dependency, recovery,
+metadata-only and fallback checks passed. The 1,000-file fixture measured
+**1,333 ms** to DOM/canvas readiness (including 500 ms settling) and **107 ms**
+to search selection; these are single-run observations, not FPS guarantees.
+No paid OpenAI calls were made. Live citation-generation accuracy and semantic
+claim quality remain unverified; tests use explicitly mocked explanations.
+
+The concise-explanation refinement on 10 October 2026 passed **77 offline tests**,
+strict TypeScript checking, formatting and the production build. Both mocked
+Edge explanation checks passed, including concrete import-use text, direct-only
+metadata without dependency source, call-site line highlighting, hidden empty
+unknowns and a collapsed generic note. The browser checks ran on port 3107 with
+a temporary configuration because port 3000 was already occupied. No paid model
+requests were made; actual generated wording and quality remain unverified.
+
+Verified on 10 October 2026: **76 offline tests passed**, including 22 new
+explanation checks. They cover success, missing credentials/consent, invalid
+sections and out-of-range references, safe provider failure, cache reuse/expiry/
+eviction, in-flight deduplication, request limits, source truncation, sensitive
+paths, SDK parameters, route boundaries and delayed responses after file or
+repository changes. The optional live GitHub unit check remained skipped.
+
+All **10 existing Edge browser checks passed**. The new fully mocked AI browser
+flow passed after scoping its alert selector to avoid Next.js's route announcer.
+It verifies disclosure before transmission, explicit sending, setup failure and
+retry, source-line highlighting/focus, and search selection clearing the previous
+explanation. Its screenshot was visually inspected. TypeScript, formatting and
+production build passed; configured credential values were absent from browser
+JavaScript. The hierarchy, label, metadata-only and dependency-recovery browser
+checks remain intact.
+
+The 1,000-file browser fixture measured **1,427 ms** to DOM/canvas readiness
+(including 500 ms settling), and **100 ms** to search selection and its label
+in this run. These are observations, not FPS guarantees. **No paid OpenAI calls
+were made.** Live model quality, provider-account access and alternative models
+remain unverified; all AI responses used in verification were labelled fixtures.
 
 ### Express download recovery
 
@@ -219,6 +385,9 @@ Manual follow-up: test reduced motion; navigate import/search/folders/files/deta
 - lib/model.ts: serializable graph and limits, without rendering objects.
 - lib/analyze.ts: AST extraction from loaded text and resolution against full inventory.
 - lib/dependency-message.ts: outgoing analysis explanations and qualified incoming empty states.
+- lib/explanation.ts and lib/explanation-input.ts: eligibility, bounded context, structured schema and source-reference validation.
+- lib/explanation-provider.ts and lib/explanation-service.ts: server-only OpenAI adapter, safe failures, rate limits, bounded caching and in-flight deduplication.
+- components/FileExplanation.tsx and app/api/explain/route.ts: disclosure, on-demand requests, selection isolation and source highlighting.
 - lib/inventory.ts: metadata-only nodes, preview eligibility and LFS-pointer recognition.
 - lib/file-types.ts: shared classification, category colours and preview allowlist.
 - lib/github.ts and lib/policy.ts: bounded fetching and exclusions.
@@ -234,6 +403,6 @@ Manual follow-up: test reduced motion; navigate import/search/folders/files/deta
 - app/api/: local demo and public GitHub endpoints.
 - tests/ and e2e/: parser, boundaries, interactions and scale checks.
 
-Stages followed PROJECT_BRIEF.md in order: model/fixture tests, fixture explorer, public import, verification/documentation. AI, private repositories, accounts, collaboration, history, impact predictions and deployment remain deferred. No Git repository was present in the supplied folder; no commits or publishing were performed.
+Stages followed PROJECT_BRIEF.md in order: model/fixture tests, fixture explorer, public import, verification/documentation. Single-file AI explanation was subsequently authorised and added. Repository chat, private repositories, accounts, collaboration, history, impact predictions and deployment remain deferred. Git was present for the AI refinement; local checkpoint `49e96fc` records the unchanged app before the feature. The secret/generated-file scan passed; the ignored local environment and unrelated untracked terminal-output artifact were excluded. Nothing was pushed or deployed.
 
 References: [Next.js installation](https://nextjs.org/docs/app/getting-started/installation), [Fiber compatibility](https://r3f.docs.pmnd.rs/getting-started/installation), [TypeScript compiler API](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API), [GitHub trees](https://docs.github.com/en/rest/git/trees), [Three.js](https://threejs.org/docs/), [Playwright browsers](https://playwright.dev/docs/browsers).
